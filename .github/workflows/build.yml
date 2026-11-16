@@ -18,13 +18,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Nếu repo chỉ chứa file .zip (chưa giải nén) thì tự giải nén vào thư mục _project
+      - name: Extract project zip if needed
+        run: |
+          existing=$(find . -maxdepth 4 \( -name settings.gradle.kts -o -name settings.gradle \) -not -path './.git/*' | head -n 1)
+          if [ -z "$existing" ]; then
+            zipfile=$(find . -maxdepth 2 -name '*.zip' -not -path './.git/*' | head -n 1)
+            if [ -n "$zipfile" ]; then
+              echo "Giải nén $zipfile"
+              unzip -q -o "$zipfile" -d _project
+            fi
+          fi
+
       # Tự tìm thư mục chứa settings.gradle(.kts), kể cả khi dự án nằm trong thư mục con
       - name: Find Gradle project
         id: proj
         run: |
-          file=$(find . -maxdepth 3 \( -name settings.gradle.kts -o -name settings.gradle \) -not -path './.git/*' | head -n 1)
+          file=$(find . -maxdepth 4 \( -name settings.gradle.kts -o -name settings.gradle \) -not -path './.git/*' | head -n 1)
           if [ -z "$file" ]; then
-            echo "::error::Không tìm thấy settings.gradle.kts trong repo. Hãy đẩy đủ các file dự án (app/, build.gradle.kts, settings.gradle.kts, gradle.properties) lên GitHub."
+            echo "::error::Không tìm thấy settings.gradle.kts trong repo. Hãy đẩy đủ các file dự án (app/, build.gradle.kts, settings.gradle.kts, gradle.properties) hoặc file AutoWebCast.zip lên GitHub."
             find . -maxdepth 3 -not -path './.git/*' | head -n 60
             exit 1
           fi
