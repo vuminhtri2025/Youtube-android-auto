@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -56,8 +56,37 @@ jobs:
         with:
           gradle-version: 8.7
 
+      # Maven Central hay trả lỗi 429 (Too Many Requests) cho máy chủ GitHub Actions.
+      # Thêm bản sao Maven Central của Google làm nguồn ưu tiên (không cần sửa file dự án).
+      - name: Use Maven Central mirror
+        run: |
+          init_dir="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+          mkdir -p "$init_dir"
+          cat > "$init_dir/central-mirror.gradle" <<'EOF'
+          def mirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          beforeSettings { settings ->
+              settings.pluginManagement.repositories {
+                  maven { name = 'CentralMirror'; url = uri(mirror) }
+              }
+              settings.dependencyResolutionManagement.repositories {
+                  maven { name = 'CentralMirror'; url = uri(mirror) }
+              }
+          }
+          EOF
+
+      # Tự thử lại tối đa 3 lần nếu tải thư viện bị lỗi tạm thời
       - name: Build debug APK
-        run: gradle -p "${{ steps.proj.outputs.dir }}" assembleDebug --stacktrace
+        env:
+          PROJECT_DIR: ${{ steps.proj.outputs.dir }}
+        run: |
+          for attempt in 1 2 3; do
+            if gradle -p "$PROJECT_DIR" assembleDebug --stacktrace; then
+              exit 0
+            fi
+            echo "::warning::Build lỗi (lần $attempt/3), thử lại sau 30 giây..."
+            sleep 30
+          done
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
